@@ -1,71 +1,107 @@
-import argparse
+# main.py
+
 import requests
 from bs4 import BeautifulSoup
-from scanner.scanner import scan_url, write_html_report
+from urllib.parse import urljoin
+from scanner.scanner import scan_url
 
 def login_dvwa_session(base_url="http://localhost:8080"):
     """
     Logs into DVWA (admin/password) and returns a requests.Session with cookies set.
+    After posting to login.php, it explicitly requests the index page to confirm login.
     """
+    # Remove any trailing slash from the base URL to prevent double slashes later.
+    base_url = base_url.rstrip("/")
     session = requests.Session()
 
-    # 1. Fetch login page to get CSRF token
-    login_page = session.get(f"{base_url}/login.php")
-    soup = BeautifulSoup(login_page.text, "html.parser")
-    token_field = soup.find("input", {"name": "user_token"})
-    if not token_field:
-        print("[!] Could not find user_token in DVWA login form.")
-        return session
+    try:
+        # 1. Fetch login page to get CSRF token
+        login_page = session.get(f"{base_url}/login.php")
+        soup = BeautifulSoup(login_page.text, "html.parser")
+        token_field = soup.find("input", {"name": "user_token"})
+        if not token_field:
+            print("[!] Could not find user_token in DVWA login form.")
+            return session
 
-    user_token = token_field.get("value", "")
+        user_token = token_field.get("value", "")
+        # 2. Submit login with credentials and CSRF token
+        payload = {
+            "username": "admin",
+            "password": "password",
+            "Login": "Login",
+            "user_token": user_token
+        }
+        session.post(f"{base_url}/login.php", data=payload)
+        # 3. Explicitly request the index page to confirm login
+        index_page = session.get(f"{base_url}/index.php")
+        if "Welcome" in index_page.text and "Damn Vulnerable Web Application" in index_page.text:
+            print("[*] Successfully logged in to DVWA!")
+        else:
+            print("[!] DVWA login may have failed. Check credentials or DVWA setup.")
 
-    # 2. Submit login
-    payload = {
-        "username": "admin",
-        "password": "password",
-        "Login": "Login",
-        "user_token": user_token
-    }
-    r = session.post(f"{base_url}/login.php", data=payload)
+    except requests.exceptions.RequestException as e:
+        print(f"[ERROR] Failed to connect to {base_url}: {e}")
 
-    if "Welcome to Damn Vulnerable Web App!" in r.text:
-        print("[*] Successfully logged in to DVWA!")
-    else:
-        print("[!] DVWA login may have failed. Check credentials or DVWA setup.")
     return session
 
+def get_vulnerability_pages(session, base_url):
+    """
+    Extracts all vulnerability page URLs from DVWA's vulnerabilities page.
+    """
+    # Clean up base_url
+    base_url = base_url.rstrip("/")
+    vuln_urls = []
+    
+    try:
+        vuln_page = session.get(f"{base_url}/vulnerabilities/")
+        if vuln_page.status_code != 200:
+            print(f"[!] Failed to access vulnerabilities page. Status Code: {vuln_page.status_code}")
+            return vuln_urls
+
+        soup = BeautifulSoup(vuln_page.text, "html.parser")
+        links = soup.find_all("a", href=True)
+        print(f"[*] Found {len(links)} links on vulnerabilities page.")
+
+        for link in links:
+            href = link["href"]
+            # Accept both absolute and relative links that mention 'vulnerabilities'
+            if href.startswith("/vulnerabilities/") or href.startswith("vulnerabilities/"):
+                full_url = urljoin(base_url, href)
+                vuln_urls.append(full_url)
+                print(f"[DEBUG] Found vulnerability page: {full_url}")
+
+    except requests.exceptions.RequestException as e:
+        print(f"[ERROR] Failed to fetch vulnerability pages: {e}")
+
+    # Fallback in case no vulnerability pages were auto-discovered
+    if not vuln_urls:
+        print("[!] No vulnerability pages found. Using fallback list.")
+        fallback = [
+            "vulnerabilities/sqli/",
+            "vulnerabilities/csrf/",
+            "vulnerabilities/xss_d/",
+            "vulnerabilities/xss_r/",
+            "vulnerabilities/exec/"
+        ]
+        for path in fallback:
+            full_url = f"{base_url}/{path}"
+            vuln_urls.append(full_url)
+            print(f"[DEBUG] Fallback URL: {full_url}")
+
+    return vuln_urls
+
 def main():
-    parser = argparse.ArgumentParser(description="Advanced Web Vulnerability Scanner for DVWA")
-    parser.add_argument("--url", required=True,
-                        help="Target URL to scan (e.g., http://localhost:8080/vulnerabilities/sqli/)")
-    parser.add_argument("--login", action="store_true",
-                        help="Attempt to log into DVWA before scanning (default creds: admin/password)")
-    parser.add_argument("--base", default="http://localhost:8080",
-                        help="Base URL for DVWA login (default: http://localhost:8080)")
-    parser.add_argument("--crawl", action="store_true",
-                        help="(Experimental) Recursively crawl links found on each page within the same domain.")
-    parser.add_argument("--report", help="Output HTML report to file (e.g., report.html)")
-    parser.add_argument("--checks", nargs='+', default=["sqli", "xss", "cmdi", "stored_xss"],
-                        help="Specify which checks to perform (default: all checks)")
-
-    args = parser.parse_args()
-
-    # If --login is provided, attempt DVWA login
-    session = None
-    if args.login:
-        session = login_dvwa_session(args.base)
-        if not session:
-            print("[!] DVWA login failed; scanning might be limited.")
-
-    print(f"[*] Starting scan for {args.url}")
-    # run the main scanning function
-    scan_url(args.url, session=session, checks=args.checks, do_crawl=args.crawl)
+    base_url = "http://localhost:8080"  # Adjust if needed
+    # Log in and get the session
+    session = login_dvwa_session(base_url)
+    # Get the vulnerability pages from DVWA
+    vuln_pages = get_vulnerability_pages(session, base_url)
+    # Scan each vulnerability page
+    for page in vuln_pages:
+        print(f"[*] Scanning {page}")
+        scan_url(page, session=session, checks=["sqli", "xss", "cmdi", "stored_xss"], do_crawl=True)
     print("[*] Scan complete.")
-
-    # Generate HTML report if requested
-    if args.report:
-        write_html_report(args.report)
-        print(f"[*] Report saved to {args.report}")
+    print("[*] Report saved to report.html")
 
 if __name__ == "__main__":
     main()
