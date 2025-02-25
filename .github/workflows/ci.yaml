@@ -15,7 +15,7 @@ jobs:
 
       - name: Install dependencies and run tests
         run: |
-          cd VulnScanner  # <--- IMPORTANT: change into your project folder
           pip install --upgrade pip
           pip install requests beautifulsoup4 pytest
           pytest --maxfail=1 --disable-warnings
+
