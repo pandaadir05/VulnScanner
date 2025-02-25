@@ -16,9 +16,12 @@ jobs:
       - name: Install and Test
         run: |
           pip install --upgrade pip
+          # Install dependencies from requirements.txt
+          pip install -r requirements.txt
           # Install your package in editable mode
           pip install -e .
-          # Also ensure pytest is installed (or put it in setup.py)
+          # Also ensure pytest is installed (or put it in requirements.txt)
           pip install pytest
           # Now run tests
           pytest --maxfail=1 --disable-warnings
+

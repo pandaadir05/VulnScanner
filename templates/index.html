@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Home - VulnScanner{% endblock %}
+{% block content %}
+  <h1>Web Vulnerability Scanner</h1>
+  <form method="POST" action="{{ url_for('start_scan') }}">
+    <div class="mb-3">
+      <label for="urlInput" class="form-label">Target URL:</label>
+      <input type="text" class="form-control" id="urlInput" name="url" placeholder="http://localhost:8080" required>
+    </div>
+
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" name="login" value="true" id="loginCheck">
+      <label class="form-check-label" for="loginCheck">Login to DVWA (admin/password)</label>
+    </div>
+
+    <hr>
+    <h4>Vulnerabilities to Check:</h4>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" name="checks" value="sqli" id="sqliCheck" checked>
+      <label class="form-check-label" for="sqliCheck">SQL Injection</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" name="checks" value="xss" id="xssCheck" checked>
+      <label class="form-check-label" for="xssCheck">Cross-Site Scripting</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" name="checks" value="cmdi" id="cmdiCheck" checked>
+      <label class="form-check-label" for="cmdiCheck">Command Injection</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" name="checks" value="stored_xss" id="storedXssCheck">
+      <label class="form-check-label" for="storedXssCheck">Stored XSS (Advanced)</label>
+    </div>
+    
+    <hr>
+    <button type="submit" class="btn btn-primary">Start Scan</button>
+  </form>
+{% endblock %}

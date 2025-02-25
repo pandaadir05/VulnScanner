@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Scan Results{% endblock %}
+{% block content %}
+  <h1>Scan Results</h1>
+  {% if results and results|length > 0 %}
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Vulnerability</th>
+          <th>URL</th>
+          <th>Payload</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in results %}
+        <tr>
+          <td>{{ r.type }}</td>
+          <td>{{ r.url }}</td>
+          <td>{{ r.payload }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="alert alert-info">No vulnerabilities found or scan not started yet.</div>
+  {% endif %}
+  <a href="{{ url_for('index') }}" class="btn btn-secondary">New Scan</a>
+{% endblock %}

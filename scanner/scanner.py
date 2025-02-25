@@ -48,14 +48,18 @@ def init_scanner():
     PLUGINS = load_plugins()  # load all plugin modules once
     print(f"[*] Loaded {len(PLUGINS)} plugins.")
 
-def scan_url(start_url, session=None, do_crawl=False, visited=None):
+def scan_url(start_url, session=None, checks=None, do_crawl=False, visited=None):
     """
     Fetch the page, test query params, test forms, optionally crawl links.
     :param start_url: the initial URL to scan
     :param session: requests.Session() object
+    :param checks: list of checks to perform (e.g., ["sqli", "xss", "cmdi", "stored_xss"])
     :param do_crawl: if True, recursively crawl links on the same domain
     :param visited: a set of visited URLs to avoid infinite loops
     """
+    if checks is None:
+        checks = ["sqli", "xss", "cmdi", "stored_xss"]  # default all
+
     # ensure PLUGINS is loaded
     if not PLUGINS:
         init_scanner()
@@ -81,9 +85,12 @@ def scan_url(start_url, session=None, do_crawl=False, visited=None):
     if query_params:
         # Flatten the dictionary to {param: first_value}
         flat_params = {k: v[0] for k, v in query_params.items()}
-        sqli_found = check_sqli(start_url, flat_params, method='get', session=session)
-        xss_found = check_xss(start_url, flat_params, method='get', session=session)
-        cmd_found = check_cmd_injection(start_url, flat_params, method='get', session=session)
+        if "sqli" in checks:
+            sqli_found = check_sqli(start_url, flat_params, method='get', session=session)
+        if "xss" in checks:
+            xss_found = check_xss(start_url, flat_params, method='get', session=session)
+        if "cmdi" in checks:
+            cmd_found = check_cmd_injection(start_url, flat_params, method='get', session=session)
 
         if not any([sqli_found, xss_found, cmd_found]):
             print(f"[*] No vulnerabilities found in query params at {start_url}.")
@@ -97,28 +104,36 @@ def scan_url(start_url, session=None, do_crawl=False, visited=None):
             action = form.get('action')
             method = form.get('method', 'get').lower()
             inputs = form.get('inputs', [])
-            params_dict = {input.get('name'): input.get('value', '') for input in inputs}
+            
+            # Debug print statement to check the structure of inputs
+            print("DEBUG: inputs =", inputs)
+            
+            params_dict = {key: value for key, value in inputs}
+
 
             # Suppose the action URL is the same page that stores comments
             # We'll attempt a stored XSS if the form might be for 'comments'
             # or 'message' field, etc.
-            if "xss_s" in action:  # naive example check
+            if "xss_s" in action and "stored_xss" in checks:  # naive example check
                 stored_found = check_stored_xss_submit(action, params_dict, session=session)
                 if not stored_found:
                     print(f"[*] Form at {action} not vulnerable to stored XSS (basic check).")
             else:
                 # existing checks: sqli, xss, cmd_injection, etc.
-                sqli_found = check_sqli(action, params_dict, method=method, session=session)
-                if not sqli_found:
-                    print(f"[*] Form at {action} not vulnerable to SQL Injection (basic check).")
+                if "sqli" in checks:
+                    sqli_found = check_sqli(action, params_dict, method=method, session=session)
+                    if not sqli_found:
+                        print(f"[*] Form at {action} not vulnerable to SQL Injection (basic check).")
 
-                xss_found = check_xss(action, params_dict, method=method, session=session)
-                if not xss_found:
-                    print(f"[*] Form at {action} not vulnerable to XSS (basic check).")
+                if "xss" in checks:
+                    xss_found = check_xss(action, params_dict, method=method, session=session)
+                    if not xss_found:
+                        print(f"[*] Form at {action} not vulnerable to XSS (basic check).")
 
-                cmd_injection_found = check_cmd_injection(action, params_dict, method=method, session=session)
-                if not cmd_injection_found:
-                    print(f"[*] Form at {action} not vulnerable to Command Injection (basic check).")
+                if "cmdi" in checks:
+                    cmd_injection_found = check_cmd_injection(action, params_dict, method=method, session=session)
+                    if not cmd_injection_found:
+                        print(f"[*] Form at {action} not vulnerable to Command Injection (basic check).")
 
             # Call plugins to check forms
             for plugin in PLUGINS:
@@ -138,7 +153,7 @@ def scan_url(start_url, session=None, do_crawl=False, visited=None):
         for link in links:
             # only crawl if same domain
             if link.startswith(domain):
-                scan_url(link, session=session, do_crawl=True, visited=visited)
+                scan_url(link, session=session, checks=checks, do_crawl=True, visited=visited)
 
 def write_html_report(filename="report.html"):
     with open(filename, "w", encoding="utf-8") as f:
