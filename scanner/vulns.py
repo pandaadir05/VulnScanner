@@ -104,19 +104,41 @@ def check_cmd_injection(url, params, method='get', session=None):
 # -------------------------------
 # Stored XSS
 # -------------------------------
+STORED_XSS_PAYLOAD = "<script>alert('Stored XSS')</script>"
 
-def check_stored_xss(url, param_key="comment", session=None):
+def check_stored_xss_submit(url, form_params, session=None):
+    """
+    1) Submits the STORED_XSS_PAYLOAD using 'form_params'
+    2) Re-fetches the page to see if payload is present in the response
+    """
     if session is None:
         session = requests.Session()
 
-    payload = "<script>alert('Stored XSS')</script>"
-    # Post the payload to the URL
-    session.post(url, data={param_key: payload})
+    # Add the XSS payload to the form parameters
+    form_params.update({"comment": STORED_XSS_PAYLOAD})
 
-    # Re-fetch the page to see if the payload is reflected
-    r = session.get(url)
-    if payload in r.text:
+    # 1) Submit the payload
+    submission = session.post(url, data=form_params)
+
+    # 2) Re-fetch the same page (or another page that displays comments)
+    result = session.get(url)
+    if STORED_XSS_PAYLOAD in result.text:
         print(f"[!] Possible Stored XSS at {url} (payload found after submission)")
         return True
+
     return False
+
+# Example usage
+if __name__ == "__main__":
+    url = "http://example.com/vulnerabilities/xss_s/"
+    form_params = {
+        "txtName": "test",
+        "mtComment": "test",
+        "token": "example_token"
+    }
+
+    if check_stored_xss_submit(url, form_params):
+        print("Stored XSS vulnerability detected!")
+    else:
+        print("No Stored XSS vulnerability detected.")
 
