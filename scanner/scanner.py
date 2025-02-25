@@ -6,6 +6,16 @@ from scanner.vulns import (
     check_cmd_injection,
 )
 
+# Global list to store results
+results = []
+
+def record_result(vuln_type, url, payload):
+    results.append({
+        "type": vuln_type,
+        "url": url,
+        "payload": payload
+    })
+
 def scan_url(start_url, session=None, do_crawl=False, visited=None):
     """
     Fetch the page, test query params, test forms, optionally crawl links.
@@ -72,3 +82,19 @@ def scan_url(start_url, session=None, do_crawl=False, visited=None):
             # only crawl if same domain
             if link.startswith(domain):
                 scan_url(link, session=session, do_crawl=True, visited=visited)
+
+def write_html_report(filename="report.html"):
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write("<html><head><title>Scan Report</title></head><body>")
+        f.write("<h1>Web Scanner Report</h1>")
+        if not results:
+            f.write("<p>No vulnerabilities found.</p>")
+        else:
+            f.write("<ul>")
+            for r in results:
+                f.write(f"<li>{r['type']} at {r['url']} with payload '{r['payload']}'</li>")
+            f.write("</ul>")
+        f.write("</body></html>")
+
+# At the end of scan_url, or in main.py after we call scan_url, do:
+# write_html_report()

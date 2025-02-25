@@ -55,6 +55,7 @@ def main():
                         help="Base URL for DVWA login (default: http://localhost:8080)")
     parser.add_argument("--crawl", action="store_true",
                         help="(Experimental) Recursively crawl links found on each page within the same domain.")
+    parser.add_argument("--report", help="Output HTML report to file (e.g., report.html)")
     args = parser.parse_args()
 
     # Create a shared requests session (to maintain cookies if we login)
@@ -70,6 +71,12 @@ def main():
     # pass crawl option to scan_url if we want recursion
     scan_url(args.url, session=session, do_crawl=args.crawl)
     print("[*] Scan complete.")
+
+    # Generate HTML report if --report is provided
+    if args.report:
+        from scanner.scanner import write_html_report
+        write_html_report(args.report)
+        print(f"[*] Report saved to {args.report}")
 
 if __name__ == "__main__":
     main()
