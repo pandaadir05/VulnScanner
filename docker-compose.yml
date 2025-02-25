@@ -1,0 +1,20 @@
+version: '3.7'
+services:
+  dvwa:
+    image: vulnerables/web-dvwa
+    container_name: dvwa
+    ports:
+      - "8080:80"
+    # no special environment needed, it starts DVWA on port 80 inside the container
+
+  scanner:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: vuln_scanner
+    # We run the container but override CMD to keep it alive or run a shell
+    # Alternatively, you can have your scanner run in some server mode 
+    # or just require a user to do `docker-compose run scanner --url ...`
+    command: tail -f /dev/null  # Keeps the container running
+    volumes:
+      - .:/app  # Mount the current directory to /app in the container
