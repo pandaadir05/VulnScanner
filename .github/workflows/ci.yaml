@@ -7,13 +7,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: '3.9'
-      - name: Install dependencies
+
+      - name: Install dependencies and run tests
         run: |
+          cd VulnScanner  # <--- IMPORTANT: change into your project folder
+          pip install --upgrade pip
           pip install requests beautifulsoup4 pytest
-      - name: Run tests
-        run: |
           pytest --maxfail=1 --disable-warnings
