@@ -1,8 +1,0 @@
-Metadata-Version: 2.2
-Name: VulnScanner
-Version: 0.1
-License-File: LICENSE
-Requires-Dist: requests
-Requires-Dist: beautifulsoup4
-Requires-Dist: pytest
-Dynamic: requires-dist
