@@ -6,12 +6,11 @@ import os
 # Add the root project directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from main import login_dvwa_session  # Now the import should work
+from main import login_dvwa_session  # Correct import statement
 
 from flask import Flask, render_template, request, redirect, url_for
 from .scanner import scan_url, results as global_results
 from .scanner import init_scanner  # if you have a plugin system or similar
-from scanner.main import login_dvwa_session  # or whichever function logs in if needed
 
 app = Flask(__name__)
 
@@ -35,7 +34,7 @@ def start_scan():
     # If user wants to login:
     if do_login:
         # Create a requests.Session() with DVWA login
-        session = login_dvwa_session(base_url="http://localhost:8080")
+        session = login_dvwa_session(base_url=target_url)
     else:
         session = None
 

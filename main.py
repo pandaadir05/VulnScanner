@@ -1,49 +1,38 @@
 import argparse
 import requests
 from bs4 import BeautifulSoup
-from scanner.scanner import scan_url
+from scanner.scanner import scan_url, write_html_report
 
-def login_dvwa(session, base_url):
+def login_dvwa_session(base_url="http://localhost:8080"):
     """
-    Logs into DVWA by:
-      1) GET login.php to fetch CSRF token (user_token)
-      2) POST login data with username, password, user_token
+    Logs into DVWA (admin/password) and returns a requests.Session with cookies set.
     """
-    login_url = f"{base_url}/login.php"
-    try:
-        # 1) Fetch login page to get user_token
-        r = session.get(login_url)
-        r.raise_for_status()
+    session = requests.Session()
 
-        soup = BeautifulSoup(r.text, 'html.parser')
-        token_field = soup.find('input', {'name': 'user_token'})
-        if not token_field or not token_field.get('value'):
-            print("[!] Could not find user_token in login form. Check DVWA version or form structure.")
-            return False
+    # 1. Fetch login page to get CSRF token
+    login_page = session.get(f"{base_url}/login.php")
+    soup = BeautifulSoup(login_page.text, "html.parser")
+    token_field = soup.find("input", {"name": "user_token"})
+    if not token_field:
+        print("[!] Could not find user_token in DVWA login form.")
+        return session
 
-        user_token = token_field['value']
+    user_token = token_field.get("value", "")
 
-        # 2) Submit login with the token
-        login_payload = {
-            'username': 'admin',
-            'password': 'password',
-            'Login': 'Login',
-            'user_token': user_token
-        }
-        r = session.post(login_url, data=login_payload)
-        r.raise_for_status()
+    # 2. Submit login
+    payload = {
+        "username": "admin",
+        "password": "password",
+        "Login": "Login",
+        "user_token": user_token
+    }
+    r = session.post(f"{base_url}/login.php", data=payload)
 
-        # Check if login was successful
-        if "Welcome to Damn Vulnerable Web App!" in r.text or "You have logged in as" in r.text:
-            print("[*] Successfully logged into DVWA!")
-            return True
-        else:
-            print("[!] Login response didn't contain expected text. Possibly wrong creds or DVWA not set up.")
-            return False
-
-    except requests.exceptions.RequestException as e:
-        print(f"[!] Error during login attempt: {e}")
-        return False
+    if "Welcome to Damn Vulnerable Web App!" in r.text:
+        print("[*] Successfully logged in to DVWA!")
+    else:
+        print("[!] DVWA login may have failed. Check credentials or DVWA setup.")
+    return session
 
 def main():
     parser = argparse.ArgumentParser(description="Advanced Web Vulnerability Scanner for DVWA")
@@ -56,25 +45,25 @@ def main():
     parser.add_argument("--crawl", action="store_true",
                         help="(Experimental) Recursively crawl links found on each page within the same domain.")
     parser.add_argument("--report", help="Output HTML report to file (e.g., report.html)")
+    parser.add_argument("--checks", nargs='+', default=["sqli", "xss", "cmdi", "stored_xss"],
+                        help="Specify which checks to perform (default: all checks)")
+
     args = parser.parse_args()
 
-    # Create a shared requests session (to maintain cookies if we login)
-    session = requests.Session()
-
     # If --login is provided, attempt DVWA login
+    session = None
     if args.login:
-        success = login_dvwa(session, args.base)
-        if not success:
-            print("[!] DVWA login failed; scanning might be limited to public pages.")
+        session = login_dvwa_session(args.base)
+        if not session:
+            print("[!] DVWA login failed; scanning might be limited.")
 
     print(f"[*] Starting scan for {args.url}")
-    # pass crawl option to scan_url if we want recursion
-    scan_url(args.url, session=session, do_crawl=args.crawl)
+    # run the main scanning function
+    scan_url(args.url, session=session, checks=args.checks, do_crawl=args.crawl)
     print("[*] Scan complete.")
 
-    # Generate HTML report if --report is provided
+    # Generate HTML report if requested
     if args.report:
-        from scanner.scanner import write_html_report
         write_html_report(args.report)
         print(f"[*] Report saved to {args.report}")
 
