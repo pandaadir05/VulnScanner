@@ -100,3 +100,23 @@ def check_cmd_injection(url, params, method='get', session=None):
             break
 
     return found_cmd
+
+# -------------------------------
+# Stored XSS
+# -------------------------------
+
+def check_stored_xss(url, param_key="comment", session=None):
+    if session is None:
+        session = requests.Session()
+
+    payload = "<script>alert('Stored XSS')</script>"
+    # Post the payload to the URL
+    session.post(url, data={param_key: payload})
+
+    # Re-fetch the page to see if the payload is reflected
+    r = session.get(url)
+    if payload in r.text:
+        print(f"[!] Possible Stored XSS at {url} (payload found after submission)")
+        return True
+    return False
+
