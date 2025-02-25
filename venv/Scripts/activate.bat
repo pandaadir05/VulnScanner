@@ -8,7 +8,7 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
-set VIRTUAL_ENV=C:\Users\telco\Desktop\web-vuln-scanner && cd web-vuln-scanner\venv
+set VIRTUAL_ENV=C:\Users\telco\Desktop\VulnScanner\venv
 
 if not defined PROMPT set PROMPT=$P$G
 

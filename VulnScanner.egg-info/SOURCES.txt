@@ -1,0 +1,13 @@
+LICENSE
+README.md
+setup.py
+VulnScanner.egg-info/PKG-INFO
+VulnScanner.egg-info/SOURCES.txt
+VulnScanner.egg-info/dependency_links.txt
+VulnScanner.egg-info/requires.txt
+VulnScanner.egg-info/top_level.txt
+scanner/__init__.py
+scanner/crawler.py
+scanner/scanner.py
+scanner/vulns.py
+tests/test_sqli.py
