@@ -1,16 +1,13 @@
-# scanner/webgui.py
-
 import sys
 import os
 
 # Add the root project directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from main import login_dvwa_session  # Correct import statement
-
+from main import login_dvwa_session, get_vulnerability_pages
 from flask import Flask, render_template, request, redirect, url_for
 from .scanner import scan_url, results as global_results
-from .scanner import init_scanner  # if you have a plugin system or similar
+from .scanner import init_scanner
 
 app = Flask(__name__)
 
@@ -22,25 +19,18 @@ def index():
 def start_scan():
     target_url = request.form.get("url")
     do_login = request.form.get("login") == "true"
-    chosen_checks = request.form.getlist("checks")  
-    # e.g., ["sqli", "xss", "cmdi", ...]
-
-    # Clear old results (global list or however you store them)
+    chosen_checks = request.form.getlist("checks")
     global_results.clear()
-
-    # Optionally init scanner or load plugins
     init_scanner()
-
-    # If user wants to login:
+    
     if do_login:
-        # Create a requests.Session() with DVWA login
         session = login_dvwa_session(base_url=target_url)
+        vuln_pages = get_vulnerability_pages(session, target_url)
+        for page in vuln_pages:
+            print(f"[*] Scanning {page}")
+            scan_url(page, session=session, checks=chosen_checks, do_crawl=True)
     else:
-        session = None
-
-    # "Scan" with or without session 
-    # If you have toggles for each check, pass them along or filter checks
-    scan_url(target_url, session=session, checks=chosen_checks)
+        scan_url(target_url, session=None, checks=chosen_checks, do_crawl=True)
     
     return redirect(url_for("show_results"))
 
@@ -50,3 +40,6 @@ def show_results():
 
 def run_gui():
     app.run(host="0.0.0.0", port=5000, debug=True)
+
+if __name__ == "__main__":
+    run_gui()
