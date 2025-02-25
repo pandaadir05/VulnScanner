@@ -1,12 +1,15 @@
-# scanner/crawler.py
-
 import requests
 from bs4 import BeautifulSoup
 
-def fetch_html(url):
-    """Fetch the HTML content of the given URL."""
+def fetch_html(url, session=None):
+    """
+    Fetch HTML from the given URL using the provided session (or requests if None).
+    """
+    if session is None:
+        session = requests
+
     try:
-        response = requests.get(url, timeout=5)
+        response = session.get(url, timeout=5)
         response.raise_for_status()
         return response.text
     except requests.exceptions.RequestException as e:
@@ -14,7 +17,9 @@ def fetch_html(url):
         return None
 
 def get_links(html, base_url):
-    """Parse the HTML to extract links and convert them to absolute URLs."""
+    """
+    Parse the HTML to extract absolute links from <a> tags.
+    """
     soup = BeautifulSoup(html, 'html.parser')
     links = set()
     for anchor in soup.find_all('a', href=True):
@@ -23,7 +28,10 @@ def get_links(html, base_url):
     return links
 
 def get_forms(html, base_url):
-    """Extract forms from the HTML, including their action, method, and inputs."""
+    """
+    Parse HTML to find forms (action, method, inputs).
+    Returns a list of form data dictionaries.
+    """
     soup = BeautifulSoup(html, 'html.parser')
     forms = []
     for form in soup.find_all('form'):

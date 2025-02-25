@@ -1,42 +1,74 @@
-# scanner/scanner.py
-
 from urllib.parse import urlparse, parse_qs
 from scanner.crawler import fetch_html, get_links, get_forms
-from scanner.vulns import check_sqli, check_xss
+from scanner.vulns import (
+    check_sqli,
+    check_xss,
+    check_cmd_injection,
+)
 
-def scan_url(start_url):
-    """Crawl the URL, find parameters, and test for vulnerabilities."""
-    html_content = fetch_html(start_url)
+def scan_url(start_url, session=None, do_crawl=False, visited=None):
+    """
+    Fetch the page, test query params, test forms, optionally crawl links.
+    :param start_url: the initial URL to scan
+    :param session: requests.Session() object
+    :param do_crawl: if True, recursively crawl links on the same domain
+    :param visited: a set of visited URLs to avoid infinite loops
+    """
+    if visited is None:
+        visited = set()
+
+    if start_url in visited:
+        return  # already scanned
+    visited.add(start_url)
+
+    html_content = fetch_html(start_url, session=session)
     if not html_content:
+        print(f"[!] No HTML content at {start_url}. Skipping.")
         return
 
-    # 1. Check if there are query params in the start URL
+    # 1. Check for query parameters in the start URL
     parsed = urlparse(start_url)
-    query_params = parse_qs(parsed.query)  # returns {param: [value], ...}
+    query_params = parse_qs(parsed.query)  # returns {param: [value,...]}
     if query_params:
-        # flatten into dict: {param: value}
+        # Flatten the dictionary to {param: first_value}
         flat_params = {k: v[0] for k, v in query_params.items()}
-        check_sqli(start_url, flat_params, method='get')
-        check_xss(start_url, flat_params, method='get')
+        sqli_found = check_sqli(start_url, flat_params, method='get', session=session)
+        xss_found = check_xss(start_url, flat_params, method='get', session=session)
+        cmd_found = check_cmd_injection(start_url, flat_params, method='get', session=session)
+
+        if not any([sqli_found, xss_found, cmd_found]):
+            print(f"[*] No vulnerabilities found in query params at {start_url}.")
+    else:
+        print(f"[*] No query params to test at {start_url}.")
 
     # 2. Check forms on this page
     forms = get_forms(html_content, start_url)
-    for form in forms:
-        action = form['action']
-        method = form['method']
-        inputs = form['inputs']
+    if forms:
+        for form in forms:
+            action = form['action']
+            method = form['method']
+            inputs = form['inputs']
 
-        # Build params dict
-        params_dict = {}
-        for (inp_name, inp_type) in inputs:
-            if inp_name:  # use a dummy value, can be refined later
-                params_dict[inp_name] = "test"
+            # Build dict with dummy 'test' values
+            params_dict = {}
+            for (inp_name, inp_type) in inputs:
+                if inp_name:
+                    params_dict[inp_name] = "test"
 
-        check_sqli(action, params_dict, method=method)
-        check_xss(action, params_dict, method=method)
+            sqli_found = check_sqli(action, params_dict, method=method, session=session)
+            xss_found = check_xss(action, params_dict, method=method, session=session)
+            cmd_found = check_cmd_injection(action, params_dict, method=method, session=session)
 
-    # 3. Optional: Crawl further links (if you want recursion)
-    #    Just be mindful of infinite loops or domain restrictions.
-    # links = get_links(html_content, start_url)
-    # for link in links:
-    #     if same domain, not visited: scan_url(link)
+            if not any([sqli_found, xss_found, cmd_found]):
+                print(f"[*] Form at {action} not vulnerable (with basic checks).")
+    else:
+        print(f"[*] No forms found on {start_url}.")
+
+    # 3. (Optional) Crawl more links within the same domain
+    if do_crawl:
+        domain = f"{parsed.scheme}://{parsed.netloc}"
+        links = get_links(html_content, start_url)
+        for link in links:
+            # only crawl if same domain
+            if link.startswith(domain):
+                scan_url(link, session=session, do_crawl=True, visited=visited)
