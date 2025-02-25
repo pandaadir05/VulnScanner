@@ -13,9 +13,12 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install dependencies and run tests
+      - name: Install and Test
         run: |
           pip install --upgrade pip
-          pip install requests beautifulsoup4 pytest
+          # Install your package in editable mode
+          pip install -e .
+          # Also ensure pytest is installed (or put it in setup.py)
+          pip install pytest
+          # Now run tests
           pytest --maxfail=1 --disable-warnings
-
